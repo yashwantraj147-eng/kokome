@@ -42,16 +42,23 @@ const CHANNELS: Channel[] = [
 ];
 
 export const SoundscapeMixer: React.FC = () => {
-  const [volumes, setVolumes] = useState<{ [key: string]: number }>({
-    rain: 0,
-    campfire: 0,
-    vinyl: 0,
-    drone: 0
+  const [volumes, setVolumes] = useState<{ [key: string]: number }>(() => {
+    try {
+      const saved = localStorage.getItem('kokome_soundscape_volumes');
+      return saved ? JSON.parse(saved) : { rain: 0, campfire: 0, vinyl: 0, drone: 0 };
+    } catch {
+      return { rain: 0, campfire: 0, vinyl: 0, drone: 0 };
+    }
   });
+
+  const updateVolumes = (next: { [key: string]: number }) => {
+    setVolumes(next);
+    localStorage.setItem('kokome_soundscape_volumes', JSON.stringify(next));
+  };
 
   const handleVolumeChange = (channelId: string, val: number) => {
     const updated = { ...volumes, [channelId]: val };
-    setVolumes(updated);
+    updateVolumes(updated);
 
     if (channelId === 'rain') audioEngine.setRainVolume(val);
     if (channelId === 'campfire') audioEngine.setCampfireVolume(val);
@@ -60,7 +67,7 @@ export const SoundscapeMixer: React.FC = () => {
   };
 
   const applyPreset = (preset: { rain: number; campfire: number; vinyl: number; drone: number }) => {
-    setVolumes(preset);
+    updateVolumes(preset);
     audioEngine.setRainVolume(preset.rain);
     audioEngine.setCampfireVolume(preset.campfire);
     audioEngine.setVinylVolume(preset.vinyl);

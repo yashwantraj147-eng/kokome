@@ -18,6 +18,7 @@ export interface ElectronAPI {
   getAlwaysOnTop: () => Promise<boolean>;
   setWindowSize: (width: number, height: number) => Promise<boolean>;
   getSystemStats: () => Promise<SystemStats>;
+  showNotification?: (title: string, body: string) => void;
   isDesktop?: boolean;
 }
 

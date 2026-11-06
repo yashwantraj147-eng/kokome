@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { TitleBar, type AppTheme } from './components/TitleBar';
 import { KokomeMascot, type MascotMood } from './components/KokomeMascot';
 import { FocusTimer } from './components/FocusTimer';
@@ -22,6 +22,9 @@ export const App: React.FC = () => {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isTimerBreak, setIsTimerBreak] = useState(false);
   const [cpuPercent, setCpuPercent] = useState(14);
+  const [affection, setAffection] = useState<number>(() => {
+    return Number(localStorage.getItem('kokome_affection') || '15');
+  });
 
   useEffect(() => {
     localStorage.setItem('kokome_theme', theme);
@@ -35,10 +38,33 @@ export const App: React.FC = () => {
     mood = 'break';
   }
 
-  const handleTimerStateChange = (running: boolean, isBreak: boolean) => {
+  const handleTimerStateChange = useCallback((running: boolean, isBreak: boolean) => {
     setIsTimerRunning(running);
     setIsTimerBreak(isBreak);
-  };
+  }, []);
+
+  const handleAddAffection = useCallback((amount = 1) => {
+    setAffection((prev) => {
+      const next = prev + amount;
+      localStorage.setItem('kokome_affection', next.toString());
+      return next;
+    });
+  }, []);
+
+  const handleToggleCompact = useCallback((nextCompact?: boolean) => {
+    audioEngine.playClickSound();
+    setIsCompact((prev) => {
+      const target = typeof nextCompact === 'boolean' ? nextCompact : !prev;
+      if (window.electronAPI && window.electronAPI.setWindowSize) {
+        if (target) {
+          window.electronAPI.setWindowSize(280, 420);
+        } else {
+          window.electronAPI.setWindowSize(440, 720);
+        }
+      }
+      return target;
+    });
+  }, []);
 
   const handleTabSwitch = (tab: TabType) => {
     audioEngine.playClickSound();
@@ -52,7 +78,7 @@ export const App: React.FC = () => {
         theme={theme}
         setTheme={setTheme}
         isCompact={isCompact}
-        setIsCompact={setIsCompact}
+        onToggleCompact={handleToggleCompact}
       />
 
       {/* Main Glass Panel */}
@@ -65,6 +91,8 @@ export const App: React.FC = () => {
               cpuPercent={cpuPercent}
               taskTitle={taskTitle}
               isCompact={true}
+              affection={affection}
+              onAddAffection={handleAddAffection}
             />
             <div className="compact-status">
               <span className="compact-task-tag">
@@ -72,7 +100,7 @@ export const App: React.FC = () => {
               </span>
               <button
                 className="compact-expand-btn"
-                onClick={() => setIsCompact(false)}
+                onClick={() => handleToggleCompact(false)}
               >
                 Expand Companion Deck
               </button>
@@ -88,6 +116,8 @@ export const App: React.FC = () => {
                 cpuPercent={cpuPercent}
                 taskTitle={taskTitle}
                 isCompact={false}
+                affection={affection}
+                onAddAffection={handleAddAffection}
               />
             </section>
 
@@ -126,23 +156,27 @@ export const App: React.FC = () => {
               </button>
             </nav>
 
-            {/* Active Tab Screen */}
+            {/* Active Tab Screen (Persisted so Timer and Audio Sliders never reset) */}
             <div className="deck-tab-view">
-              {activeTab === 'focus' && (
+              <div style={{ display: activeTab === 'focus' ? 'block' : 'none' }}>
                 <FocusTimer
                   onStateChange={handleTimerStateChange}
                   taskTitle={taskTitle}
                   setTaskTitle={setTaskTitle}
                 />
-              )}
+              </div>
 
-              {activeTab === 'ambient' && <SoundscapeMixer />}
+              <div style={{ display: activeTab === 'ambient' ? 'block' : 'none' }}>
+                <SoundscapeMixer />
+              </div>
 
-              {activeTab === 'system' && (
+              <div style={{ display: activeTab === 'system' ? 'block' : 'none' }}>
                 <SystemHUD onCpuUpdate={(cpu) => setCpuPercent(cpu)} />
-              )}
+              </div>
 
-              {activeTab === 'quests' && <QuestPad />}
+              <div style={{ display: activeTab === 'quests' ? 'block' : 'none' }}>
+                <QuestPad onAddAffection={handleAddAffection} />
+              </div>
             </div>
           </div>
         )}

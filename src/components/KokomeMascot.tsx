@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import { audioEngine } from '../utils/audioEngine';
 import { Sparkles, Cat } from 'lucide-react';
@@ -10,73 +10,102 @@ interface KokomeMascotProps {
   cpuPercent?: number;
   taskTitle?: string;
   isCompact?: boolean;
+  affection?: number;
+  onAddAffection?: (amount?: number) => void;
 }
+
+const CAT_IDLE_QUOTES = [
+  '*adjusts reading glasses* Let me review your code... Looks Good To Meow.',
+  'According to this official document, you are 100% certified awesome.',
+  'Click me for a paw of approval and affection points!',
+  'Focus now, zoomies later. That is the way of the cat.',
+  'Keep your posture upright, human! I am observing your work.'
+];
+
+const SPIRIT_IDLE_QUOTES = [
+  'I am your faithful desktop companion! (๑˃̵ᴗ˂̵)و',
+  'Headpat me anytime to boost affection!',
+  'Stay hydrated and keep shining ✨',
+  'Have you taken a deep breath today?',
+  'Everything is better when we build together!'
+];
+
+const CAT_PET_PRAISES = [
+  '*soft purr* The professor approves of your petting technique.',
+  'Paw of excellence granted! (*^ω^*)',
+  '*glasses jiggle* Very kind, human. Now back to greatness!',
+  'Purrrrr~ Affection recorded in the logs!'
+];
+
+const SPIRIT_PET_PRAISES = [
+  'Hehe, thank you for the headpat! (*^▽^*)',
+  '*happy purr* Kokome feels loved~ 💕',
+  'Energy restored! You are the best!',
+  'Purrrrr~ Let’s do our best today!'
+];
 
 export const KokomeMascot: React.FC<KokomeMascotProps> = ({
   mood,
   cpuPercent = 12,
   taskTitle = '',
-  isCompact = false
+  isCompact = false,
+  affection: propAffection,
+  onAddAffection
 }) => {
   const [avatarStyle, setAvatarStyle] = useState<'cat' | 'spirit'>(() => {
     return (localStorage.getItem('kokome_avatar_style') as 'cat' | 'spirit') || 'cat';
   });
 
-  const [affection, setAffection] = useState<number>(() => {
+  const [localAffection, setLocalAffection] = useState<number>(() => {
     return Number(localStorage.getItem('kokome_affection') || '15');
   });
+
+  const affection = typeof propAffection === 'number' ? propAffection : localAffection;
   const [isInteracting, setIsInteracting] = useState(false);
-  const [speech, setSpeech] = useState<string>('Ready to conquer the day together!');
+  const [interactionSpeech, setInteractionSpeech] = useState<string>('');
+  const [idleIndex, setIdleIndex] = useState(0);
   const [hearts, setHearts] = useState<{ id: number; x: number; y: number }[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Dynamic mood override if CPU is very high
   const activeMood: MascotMood = cpuPercent > 80 ? 'overheat' : (isInteracting ? 'petted' : mood);
 
-  // Update speech bubble based on status & avatarStyle
+  // Periodic rotation of idle quotes every 45s (only when idle)
   useEffect(() => {
-    if (activeMood === 'overheat') {
-      if (avatarStyle === 'cat') {
-        setSpeech(`*fans paper frantically* CPU is at ${cpuPercent}%! My glasses are fogging up!`);
-      } else {
-        setSpeech(`Whoa! CPU is at ${cpuPercent}%! Fans are spinning!`);
-      }
-    } else if (activeMood === 'focus') {
-      if (avatarStyle === 'cat') {
-        setSpeech(taskTitle ? `*inspects paper closely* Focusing on "${taskTitle}"... Proceed!` : '*pushes glasses up nose* Deep study session initiated! 📄👓');
-      } else {
-        setSpeech(taskTitle ? `Focusing on: "${taskTitle}" ✨` : 'Deep focus zone active! Let’s crush it~ 🎧');
-      }
-    } else if (activeMood === 'break') {
-      if (avatarStyle === 'cat') {
-        setSpeech('According to this schedule, you have earned a cup of coffee and a cat nap! ☕');
-      } else {
-        setSpeech('Time to stretch, sip some water, and relax your eyes! 🍵');
-      }
-    } else if (activeMood === 'happy') {
-      setSpeech('Yay! You are doing amazing! Keep going! 💖');
-    } else {
-      if (avatarStyle === 'cat') {
-        const catQuotes = [
-          '*adjusts reading glasses* Let me review your code... Looks Good To Meow.',
-          'According to this official document, you are 100% certified awesome.',
-          'Click me for a paw of approval and affection points!',
-          'Focus now, zoomies later. That is the way of the cat.',
-          'Keep your posture upright, human! I am observing your work.'
-        ];
-        setSpeech(catQuotes[Math.floor(Math.random() * catQuotes.length)]);
-      } else {
-        const idleQuotes = [
-          'I am your faithful desktop companion! (๑˃̵ᴗ˂̵)و',
-          'Headpat me anytime to boost affection!',
-          'Stay hydrated and keep shining ✨',
-          'Have you taken a deep breath today?',
-          'Everything is better when we build together!'
-        ];
-        setSpeech(idleQuotes[Math.floor(Math.random() * idleQuotes.length)]);
-      }
+    if (activeMood !== 'idle') return;
+    const interval = setInterval(() => {
+      setIdleIndex((prev) => prev + 1);
+    }, 45000);
+    return () => clearInterval(interval);
+  }, [activeMood]);
+
+  // Compute speech dynamically without cascading re-renders
+  const speech = useMemo(() => {
+    if (isInteracting && interactionSpeech) {
+      return interactionSpeech;
     }
-  }, [activeMood, cpuPercent, taskTitle, avatarStyle]);
+    if (activeMood === 'overheat') {
+      return avatarStyle === 'cat'
+        ? `*fans paper frantically* CPU is at ${cpuPercent}%! My glasses are fogging up!`
+        : `Whoa! CPU is at ${cpuPercent}%! Fans are spinning!`;
+    }
+    if (activeMood === 'focus') {
+      return avatarStyle === 'cat'
+        ? (taskTitle ? `*inspects paper closely* Focusing on "${taskTitle}"... Proceed!` : '*pushes glasses up nose* Deep study session initiated! 📄👓')
+        : (taskTitle ? `Focusing on: "${taskTitle}" ✨` : 'Deep focus zone active! Let’s crush it~ 🎧');
+    }
+    if (activeMood === 'break') {
+      return avatarStyle === 'cat'
+        ? 'According to this schedule, you have earned a cup of coffee and a cat nap! ☕'
+        : 'Time to stretch, sip some water, and relax your eyes! 🍵';
+    }
+    if (activeMood === 'happy') {
+      return 'Yay! You are doing amazing! Keep going! 💖';
+    }
+    // Idle speech based on current avatarStyle
+    const quotes = avatarStyle === 'cat' ? CAT_IDLE_QUOTES : SPIRIT_IDLE_QUOTES;
+    return quotes[idleIndex % quotes.length];
+  }, [isInteracting, interactionSpeech, activeMood, avatarStyle, cpuPercent, taskTitle, idleIndex]);
 
   const toggleAvatarStyle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -88,8 +117,12 @@ export const KokomeMascot: React.FC<KokomeMascotProps> = ({
 
   const handleHeadpat = (e: React.MouseEvent) => {
     const newAffection = affection + 1;
-    setAffection(newAffection);
-    localStorage.setItem('kokome_affection', newAffection.toString());
+    if (onAddAffection) {
+      onAddAffection(1);
+    } else {
+      setLocalAffection(newAffection);
+      localStorage.setItem('kokome_affection', newAffection.toString());
+    }
 
     setIsInteracting(true);
     audioEngine.playHeadpatSound(1 + (newAffection % 10) * 0.05);
@@ -108,30 +141,15 @@ export const KokomeMascot: React.FC<KokomeMascotProps> = ({
     // Level up milestone every 25 pats
     if (newAffection % 25 === 0) {
       audioEngine.playQuestCompleteSound();
-      setSpeech(`Affection Level Up! Level ${Math.floor(newAffection / 25)} reached! 🎉`);
+      setInteractionSpeech(`Affection Level Up! Level ${Math.floor(newAffection / 25)} reached! 🎉`);
       confetti({
         particleCount: 40,
         spread: 60,
         origin: { y: 0.6 }
       });
     } else {
-      if (avatarStyle === 'cat') {
-        const catPraise = [
-          '*soft purr* The professor approves of your petting technique.',
-          'Paw of excellence granted! (*^ω^*)',
-          '*glasses jiggle* Very kind, human. Now back to greatness!',
-          'Purrrrr~ Affection recorded in the logs!'
-        ];
-        setSpeech(catPraise[Math.floor(Math.random() * catPraise.length)]);
-      } else {
-        const petPraise = [
-          'Hehe, thank you for the headpat! (*^▽^*)',
-          '*happy purr* Kokome feels loved~ 💕',
-          'Energy restored! You are the best!',
-          'Purrrrr~ Let’s do our best today!'
-        ];
-        setSpeech(petPraise[Math.floor(Math.random() * petPraise.length)]);
-      }
+      const praises = avatarStyle === 'cat' ? CAT_PET_PRAISES : SPIRIT_PET_PRAISES;
+      setInteractionSpeech(praises[Math.floor(Math.random() * praises.length)]);
     }
 
     setTimeout(() => {

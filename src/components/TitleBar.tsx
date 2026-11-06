@@ -8,7 +8,7 @@ interface TitleBarProps {
   theme: AppTheme;
   setTheme: (t: AppTheme) => void;
   isCompact: boolean;
-  setIsCompact: (compact: boolean) => void;
+  onToggleCompact: (compact?: boolean) => void;
 }
 
 const THEME_LIST: { id: AppTheme; name: string; color: string }[] = [
@@ -22,7 +22,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   theme,
   setTheme,
   isCompact,
-  setIsCompact
+  onToggleCompact
 }) => {
   const [isPinned, setIsPinned] = useState(false);
 
@@ -59,16 +59,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
 
   const toggleCompact = () => {
     audioEngine.playClickSound();
-    const nextCompact = !isCompact;
-    setIsCompact(nextCompact);
-
-    if (window.electronAPI && window.electronAPI.setWindowSize) {
-      if (nextCompact) {
-        window.electronAPI.setWindowSize(280, 420);
-      } else {
-        window.electronAPI.setWindowSize(440, 720);
-      }
-    }
+    onToggleCompact(!isCompact);
   };
 
   const cycleTheme = () => {

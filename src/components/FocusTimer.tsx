@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, RotateCcw, Coffee, Zap, CheckCircle2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { audioEngine } from '../utils/audioEngine';
@@ -6,7 +6,7 @@ import { audioEngine } from '../utils/audioEngine';
 export type TimerMode = 'pomodoro' | 'sprint' | 'shortBreak' | 'longBreak';
 
 interface FocusTimerProps {
-  onStateChange: (isRunning: boolean, isBreak: boolean, taskName: string) => void;
+  onStateChange: (isRunning: boolean, isBreak: boolean) => void;
   taskTitle: string;
   setTaskTitle: (title: string) => void;
 }
@@ -27,7 +27,16 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
   const [totalSeconds, setTotalSeconds] = useState(25 * 60);
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
+  const getTodayKey = () => new Date().toISOString().slice(0, 10);
+
   const [completedSessions, setCompletedSessions] = useState(() => {
+    const today = getTodayKey();
+    const lastDate = localStorage.getItem('kokome_last_session_date');
+    if (lastDate !== today) {
+      localStorage.setItem('kokome_last_session_date', today);
+      localStorage.setItem('kokome_completed_sessions', '0');
+      return 0;
+    }
     return Number(localStorage.getItem('kokome_completed_sessions') || '0');
   });
 
@@ -35,11 +44,11 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
 
   // Synchronize state with parent mascot
   useEffect(() => {
-    onStateChange(isRunning, TIMER_PRESETS[mode].isBreak, taskTitle);
-  }, [isRunning, mode, taskTitle, onStateChange]);
+    onStateChange(isRunning, TIMER_PRESETS[mode].isBreak);
+  }, [isRunning, mode, onStateChange]);
 
   // Mode switcher
-  const switchMode = (newMode: TimerMode) => {
+  const switchMode = useCallback((newMode: TimerMode) => {
     setIsRunning(false);
     if (timerRef.current) clearInterval(timerRef.current);
     const secs = TIMER_PRESETS[newMode].minutes * 60;
@@ -47,7 +56,45 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
     setTotalSeconds(secs);
     setTimeLeft(secs);
     audioEngine.playClickSound();
-  };
+  }, []);
+
+  const handleTimerComplete = useCallback(() => {
+    setIsRunning(false);
+    audioEngine.playTimerFinishSound();
+
+    const isBreak = TIMER_PRESETS[mode].isBreak;
+    if (!isBreak) {
+      const today = getTodayKey();
+      const nextCount = completedSessions + 1;
+      setCompletedSessions(nextCount);
+      localStorage.setItem('kokome_completed_sessions', nextCount.toString());
+      localStorage.setItem('kokome_last_session_date', today);
+
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.5 }
+      });
+
+      if (window.electronAPI && window.electronAPI.showNotification) {
+        window.electronAPI.showNotification(
+          '🎉 Sprint Complete!',
+          `Great work on "${taskTitle || 'your focus sprint'}"! Time for a well-deserved break.`
+        );
+      }
+
+      // Suggest break
+      switchMode('shortBreak');
+    } else {
+      if (window.electronAPI && window.electronAPI.showNotification) {
+        window.electronAPI.showNotification(
+          '☕ Break Finished!',
+          'Ready to jump back into deep focus?'
+        );
+      }
+      switchMode('pomodoro');
+    }
+  }, [completedSessions, mode, switchMode, taskTitle]);
 
   // Timer Tick Interval
   useEffect(() => {
@@ -69,30 +116,20 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRunning, mode]);
+  }, [isRunning, handleTimerComplete]);
 
-  const handleTimerComplete = () => {
-    setIsRunning(false);
-    audioEngine.playTimerFinishSound();
-
-    const isBreak = TIMER_PRESETS[mode].isBreak;
-    if (!isBreak) {
-      const nextCount = completedSessions + 1;
-      setCompletedSessions(nextCount);
-      localStorage.setItem('kokome_completed_sessions', nextCount.toString());
-
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.5 }
-      });
-
-      // Suggest break
-      switchMode('shortBreak');
+  // Live OS Window & Taskbar Title Update
+  useEffect(() => {
+    if (isRunning) {
+      const isBreak = TIMER_PRESETS[mode].isBreak;
+      const mins = Math.floor(timeLeft / 60);
+      const secs = timeLeft % 60;
+      const fmt = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      document.title = `(${fmt}) ${isBreak ? '☕ Rest' : '🍅 Focus'} | Kokome`;
     } else {
-      switchMode('pomodoro');
+      document.title = 'Kokome | Desktop Companion';
     }
-  };
+  }, [isRunning, timeLeft, mode]);
 
   const toggleTimer = () => {
     if (!isRunning) {

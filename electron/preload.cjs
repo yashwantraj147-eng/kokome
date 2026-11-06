@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAlwaysOnTop: () => ipcRenderer.invoke('window:get-always-on-top'),
   setWindowSize: (width, height) => ipcRenderer.invoke('window:set-size', { width, height }),
   getSystemStats: () => ipcRenderer.invoke('system:get-stats'),
+  showNotification: (title, body) => ipcRenderer.send('notification:show', { title, body }),
   isDesktop: true
 });

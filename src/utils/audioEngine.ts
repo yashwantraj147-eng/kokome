@@ -177,6 +177,16 @@ class AudioEngine {
     return this.masterAmbientGain;
   }
 
+  // Smooth loop boundary to eliminate clicks when looping buffers
+  private smoothBufferLoop(data: Float32Array, sampleRate: number) {
+    const fadeLen = Math.min(Math.floor(sampleRate * 0.05), Math.floor(data.length / 4));
+    for (let i = 0; i < fadeLen; i++) {
+      const factor = 0.5 * (1 - Math.cos((Math.PI * i) / fadeLen));
+      data[i] *= factor;
+      data[data.length - 1 - i] *= factor;
+    }
+  }
+
   // 1. Procedural Rain generator
   setRainVolume(volume: number) {
     const ctx = this.initCtx();
@@ -207,6 +217,7 @@ class AudioEngine {
         data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.08;
         b6 = white * 0.115926;
       }
+      this.smoothBufferLoop(data, ctx.sampleRate);
 
       const noiseSource = ctx.createBufferSource();
       noiseSource.buffer = buffer;
@@ -261,6 +272,7 @@ class AudioEngine {
           data[i] += (Math.random() - 0.5) * 1.2;
         }
       }
+      this.smoothBufferLoop(data, ctx.sampleRate);
 
       const source = ctx.createBufferSource();
       source.buffer = buffer;
@@ -311,6 +323,7 @@ class AudioEngine {
         }
         data[i] = sample;
       }
+      this.smoothBufferLoop(data, ctx.sampleRate);
 
       const source = ctx.createBufferSource();
       source.buffer = buffer;

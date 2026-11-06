@@ -16,10 +16,30 @@ const DEFAULT_QUESTS: QuestItem[] = [
   { id: '3', text: 'Stretch wrists, neck, and shoulder blades 🧘', completed: false, rewardXp: 5 }
 ];
 
-export const QuestPad: React.FC = () => {
+interface QuestPadProps {
+  onAddAffection?: (amount: number) => void;
+}
+
+export const QuestPad: React.FC<QuestPadProps> = ({ onAddAffection }) => {
   const [quests, setQuests] = useState<QuestItem[]>(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const lastDate = localStorage.getItem('kokome_quests_date');
     const saved = localStorage.getItem('kokome_quests');
-    return saved ? JSON.parse(saved) : DEFAULT_QUESTS;
+
+    if (saved) {
+      try {
+        const parsed: QuestItem[] = JSON.parse(saved);
+        if (lastDate !== today) {
+          localStorage.setItem('kokome_quests_date', today);
+          return parsed.map((q) => ({ ...q, completed: false }));
+        }
+        return parsed;
+      } catch {
+        return DEFAULT_QUESTS;
+      }
+    }
+    localStorage.setItem('kokome_quests_date', today);
+    return DEFAULT_QUESTS;
   });
 
   const [newQuestText, setNewQuestText] = useState('');
@@ -47,9 +67,13 @@ export const QuestPad: React.FC = () => {
               spread: 60,
               origin: { y: 0.7 }
             });
-            // Boost affection
-            const curAff = Number(localStorage.getItem('kokome_affection') || '15');
-            localStorage.setItem('kokome_affection', (curAff + q.rewardXp).toString());
+            // Boost affection shared with mascot
+            if (onAddAffection) {
+              onAddAffection(q.rewardXp);
+            } else {
+              const curAff = Number(localStorage.getItem('kokome_affection') || '15');
+              localStorage.setItem('kokome_affection', (curAff + q.rewardXp).toString());
+            }
           } else {
             audioEngine.playClickSound();
           }
